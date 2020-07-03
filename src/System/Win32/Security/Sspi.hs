@@ -215,7 +215,7 @@ import Foreign.C.Types
 import Foreign.Marshal.Array
 import Control.Exception (bracketOnError, mask_)
 import Control.Monad
-import Control.Monad.Trans.Control
+import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Trans.Resource
 import Control.Monad.IO.Class
 import Data.Char (chr)
@@ -639,8 +639,8 @@ queryContextSizes ctxt =
     peek pBuffer
 
 queryRemoteCertContext :: PCtxtHandle -> ResourceT IO (ReleaseKey, PCERT_CONTEXT)
-queryRemoteCertContext ctxt = liftBaseWith $ \runInBase ->
-  alloca $ \(pBuffer :: Ptr PCERT_CONTEXT) -> runInBase $ do
+queryRemoteCertContext ctxt = withRunInIO $ \runInIo ->
+  alloca $ \(pBuffer :: Ptr PCERT_CONTEXT) -> runInIo $ do
     allocate
       (do failUnlessSuccess "QueryContextAttributes" $ fromIntegral <$> c_QueryContextAttributes ctxt
             SECPKG_ATTR_REMOTE_CERT_CONTEXT (castPtr pBuffer)
