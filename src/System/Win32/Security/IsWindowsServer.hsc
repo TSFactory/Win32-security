@@ -1,10 +1,12 @@
 {-# LANGUAGE CPP #-}
 module System.Win32.Security.IsWindowsServer
   ( isWindowsServer
+  , isWindows10
   , isMajorVersion
   ) where
 
 #include <windows.h>
+import Data.Bits             ((.|.))
 import Foreign.C.String      (withCString, peekCString)
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Storable      (Storable (peek, poke, sizeOf, alignment, peekByteOff, pokeByteOff))
@@ -36,6 +38,8 @@ instance Storable ProductType where
 
 
 -- | All os information. See MSDN for reference
+-- https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-osversioninfoexa
+-- It also has a table how to query for desired OS
 data OSVERSIONINFOEX = OSVERSIONINFOEX
      { dwMajorVersion    :: DWORD
      , dwMinorVersion    :: DWORD
@@ -141,6 +145,27 @@ isWindowsServer = do
         }
   typeMask <- c_VerSetConditionMask 0 -- initial zero mask
                                     (#const VER_PRODUCT_TYPE)
+                                    (#const VER_EQUAL)
+  withOSVERSIONINFOEX verInfoPattern
+    $ \pattern -> c_VerifyVersionInfoW pattern (#const VER_PRODUCT_TYPE) typeMask
+
+isWindows10 :: IO Bool
+isWindows10 = do
+  let verInfoPattern = OSVERSIONINFOEX
+        -- these are ignored because of comparison mask
+        { dwMinorVersion = 0
+        , dwBuildNumber  = 0
+        , dwPlatformId   = 0
+        , szCSDVersion   = ""
+        , wServicePackMajor = 0
+        , wServicePackMinor = 0
+        , wSuiteMask = 0
+        -- the important part
+        , dwMajorVersion = 10
+        , wProductType = VerNTWorkStation
+        }
+  typeMask <- c_VerSetConditionMask 0 -- initial zero mask
+                                    (#{const VER_PRODUCT_TYPE} .|. #{const VER_MAJORVERSION})
                                     (#const VER_EQUAL)
   withOSVERSIONINFOEX verInfoPattern
     $ \pattern -> c_VerifyVersionInfoW pattern (#const VER_PRODUCT_TYPE) typeMask
